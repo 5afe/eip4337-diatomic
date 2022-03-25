@@ -1,5 +1,5 @@
 import hre, { deployments } from 'hardhat'
-import { Wallet, Contract } from 'ethers'
+import { Signer, Contract } from 'ethers'
 import solc from 'solc'
 
 export const eip4337DiatomicDeployment = async () => {
@@ -10,7 +10,13 @@ export const eip4337DiatomicContract = async () => {
   return await hre.ethers.getContractFactory('SafeEIP4337Diatomic')
 }
 
-export const getTestSafe = async (deployer: Wallet, fallbackHandler?: string, moduleAddr?: string) => {
+export const getSafeAtAddress = async (address: string) => {
+  const safeMock = await hre.ethers.getContractFactory('GnosisSafeMock')
+
+  return safeMock.attach(address)
+}
+
+export const getTestSafe = async (deployer: Signer, fallbackHandler?: string, moduleAddr?: string) => {
   const safeFactory = await hre.ethers.getContractFactory('GnosisSafeMock')
   const factoryWithDeployer = safeFactory.connect(deployer)
   const safe = factoryWithDeployer.deploy(fallbackHandler, moduleAddr)
@@ -20,6 +26,20 @@ export const getTestSafe = async (deployer: Wallet, fallbackHandler?: string, mo
 
 export const getEip4337Diatomic = async () => {
   return (await eip4337DiatomicContract()).attach((await eip4337DiatomicDeployment()).address)
+}
+
+export const getTestStorageSetter = async (signer: Signer) => {
+  const factory = await hre.ethers.getContractFactory('StorageSetter')
+  const factoryWithDeployer = factory.connect(signer)
+  const setter = await factoryWithDeployer.deploy()
+
+  return setter
+}
+
+export const getStorageSetterAtAddress = async (address: string) => {
+  const storageSetter = await hre.ethers.getContractFactory('StorageSetter')
+
+  return storageSetter.attach(address)
 }
 
 export const compile = async (source: string) => {
@@ -54,7 +74,7 @@ export const compile = async (source: string) => {
   }
 }
 
-export const deployContract = async (deployer: Wallet, source: string): Promise<Contract> => {
+export const deployContract = async (deployer: Signer, source: string): Promise<Contract> => {
   const output = await compile(source)
   const transaction = await deployer.sendTransaction({ data: output.data, gasLimit: 6000000 })
   const receipt = await transaction.wait()

@@ -73,7 +73,7 @@ contract SafeEIP4337Diatomic is HandlerContext {
         transactionsReadyToExecute[safeAddress] = intermediateTxHash;
 
         if (requiredPrefund != 0) {
-            GnosisSafe(safeAddress).execTransactionFromModule(entryPoint, requiredPrefund, "0x", Enum.Operation.Call);
+            GnosisSafe(safeAddress).execTransactionFromModule(entryPoint, requiredPrefund, "", Enum.Operation.Call);
         }
     }
 

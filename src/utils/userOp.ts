@@ -1,4 +1,4 @@
-import { Contract, BigNumber, utils as ethersUtils, BigNumberish } from 'ethers'
+import { Contract, BigNumber, utils as ethersUtils, BigNumberish, ethers } from 'ethers'
 import { AddressZero } from '@ethersproject/constants'
 
 type OptionalExceptFor<T, TRequired extends keyof T = keyof T> = Partial<Pick<T, Exclude<keyof T, TRequired>>> &
@@ -60,7 +60,7 @@ export const buildSafeUserOp = (template: OptionalExceptFor<SafeUserOperation, '
     entryPoint: template.entryPoint,
     callData: template.callData || '0x',
     verificationGas: template.verificationGas || '1000000',
-    preVerificationGas: template.preVerificationGas || '1000000',
+    preVerificationGas: template.preVerificationGas || '21000',
     callGas: template.callGas || '2000000',
     maxFeePerGas: template.maxFeePerGas || '10000000000',
     maxPriorityFeePerGas: template.maxPriorityFeePerGas || '10000000000',
@@ -128,8 +128,8 @@ export const buildUserOperationFromSafeUserOperation = ({
     // use same maxFeePerGas and maxPriorityFeePerGas to ease testing prefund validation
     // otherwise it's tricky to calculate the prefund because of dynamic parameters like block.basefee
     // check UserOperation.sol#gasPrice()
-    maxFeePerGas: safeOp.maxFeePerGas || '10000000000',
-    maxPriorityFeePerGas: safeOp.maxPriorityFeePerGas || '10000000000',
+    maxFeePerGas: safeOp.maxFeePerGas || '5000000000',
+    maxPriorityFeePerGas: safeOp.maxPriorityFeePerGas || '1500000000',
     initCode: '0x',
     paymaster: AddressZero,
     paymasterData: '0x',
@@ -156,4 +156,10 @@ export const getRequiredPrefund = (userOp: UserOperation): string => {
 
 export const calculateIntermediateTxHash = (userOp: UserOperation, entryPoint: string, chainId: BigNumberish): string => {
   return ethersUtils.solidityKeccak256(['bytes', 'uint256', 'address', 'uint256'], [userOp.callData, userOp.nonce, entryPoint, chainId])
+}
+
+export const getSupportedEntryPoints = async (provider: ethers.providers.JsonRpcProvider): Promise<string[]> => {
+  const supportedEntryPoints = await provider.send('eth_supportedEntryPoints', []).then((ret) => ret.map(ethers.utils.getAddress))
+
+  return supportedEntryPoints
 }
