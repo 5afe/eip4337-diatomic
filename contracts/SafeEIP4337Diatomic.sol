@@ -11,7 +11,7 @@ import "./UserOperation.sol";
 error InvalidCaller();
 
 /// @notice Thrown when userOp suggests a mismatching nonce
-error InvalidNonce();
+error InvalidNonce(uint256 actual, uint256 expected);
 
 /// @notice Thrown when the prefund quoted by the entrypoint is larger than one defined in the userOp
 error InvalidPrefund();
@@ -61,7 +61,7 @@ contract SafeEIP4337Diatomic is HandlerContext {
 
         // We need to increase the nonce to make it impossible to drain the safe by making it send prefunds for the same transaction
         uint256 safeNonce = safeNonces[safeAddress]++;
-        if (safeNonce != userOp.nonce) revert InvalidNonce();
+        if (safeNonce != userOp.nonce) revert InvalidNonce(userOp.nonce, safeNonce);
 
         // We need to make sure that the entryPoint's requested prefund is in bounds
         if (requiredPrefund > userOp.requiredPreFund()) revert InvalidPrefund();

@@ -139,9 +139,9 @@ export const buildUserOperationFromSafeUserOperation = ({
 }
 
 export const getRequiredGas = (userOp: UserOperation): string => {
-  let multiplier = 1
+  let multiplier = 3
   if (userOp.paymaster === AddressZero) {
-    multiplier = 3
+    multiplier = 1
   }
 
   return BigNumber.from(userOp.callGas)
