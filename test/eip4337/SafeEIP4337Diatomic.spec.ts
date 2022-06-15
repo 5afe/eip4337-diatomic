@@ -1,10 +1,11 @@
 import { BigNumber } from 'ethers'
 import { AddressZero } from '@ethersproject/constants'
+import { parseEther } from '@ethersproject/units'
 import { expect } from 'chai'
 import hre, { deployments, waffle } from 'hardhat'
 import '@nomiclabs/hardhat-ethers'
-import { deployContract, getTestSafe, getEip4337Diatomic } from '../utils/setup'
-import { buildSignatureBytes, signHash } from '../../src/utils/execution'
+import { deployContract, getTestSafe, getEip4337Diatomic, getEip4337DiatomicExposed } from '../utils/setup'
+import { buildSignatureBytes, signHash, TRANSACTION_TO_EXECUTE_SLOT } from '../../src/utils/execution'
 import {
   buildSafeUserOp,
   buildSafeUserOpContractCall,
@@ -14,7 +15,6 @@ import {
   calculateIntermediateTxHash,
   buildSafeUserOpTransaction,
 } from '../../src/utils/userOp'
-import { parseEther } from '@ethersproject/units'
 import { chainId } from '../utils/encoding'
 
 describe('SafeEIP4337Diatomic', async () => {
@@ -24,6 +24,7 @@ describe('SafeEIP4337Diatomic', async () => {
     await deployments.fixture()
 
     const eip4337Diatomic = await getEip4337Diatomic()
+    const eip4337DiatomicExposed = await getEip4337DiatomicExposed(user1)
     const safe = await getTestSafe(user1, eip4337Diatomic.address, eip4337Diatomic.address)
 
     const setterSource = `
@@ -43,6 +44,7 @@ describe('SafeEIP4337Diatomic', async () => {
       eip4337Diatomic,
       eip4337Safe: eip4337Diatomic.attach(safe.address),
       storageSetter,
+      eip4337DiatomicExposed,
     }
   })
 
@@ -79,6 +81,16 @@ describe('SafeEIP4337Diatomic', async () => {
       )
 
       expect(operation2Hash).to.equal(calculateSafeOperationHash(eip4337Diatomic.address, operation2, await chainId()))
+    })
+  })
+
+  describe('getIntermediateTransactionHash', () => {
+    it('should correctly calculate  the intermediate hash of the transaction', async () => {
+      const { eip4337DiatomicExposed } = await setupTests()
+
+      const intermediateTxHash = await eip4337DiatomicExposed.exposedGetIntermediateTransactionHash('0x', 0, AddressZero, 1)
+
+      expect(intermediateTxHash).to.equal(calculateIntermediateTxHash('0x', 0, AddressZero, 1))
     })
   })
 
@@ -228,8 +240,8 @@ describe('SafeEIP4337Diatomic', async () => {
 
     it('should mark the transaction as ready to be executed', async () => {
       const { eip4337Safe, eip4337Diatomic } = await setupTests()
+      const provider = hre.ethers.provider
 
-      expect(await eip4337Safe.transactionsReadyToExecute(eip4337Safe.address)).to.equal(`0x${'0'.repeat(64)}`)
       const safeOp = buildSafeUserOp({ safe: eip4337Safe.address, nonce: '0', entryPoint: user1.address })
       const safeOpHash = calculateSafeOperationHash(eip4337Diatomic.address, safeOp, await chainId())
       const signature = buildSignatureBytes([await signHash(user1, safeOpHash)])
@@ -239,11 +251,11 @@ describe('SafeEIP4337Diatomic', async () => {
         signature,
       })
       const requiredPrefund = getRequiredPrefund(userOp)
-      const expectedIntermediateTxHash = calculateIntermediateTxHash(userOp, user1.address, await chainId())
+      const expectedIntermediateTxHash = calculateIntermediateTxHash(userOp.callData, userOp.nonce, user1.address, await chainId())
 
+      expect(await provider.getStorageAt(eip4337Safe.address, TRANSACTION_TO_EXECUTE_SLOT)).to.equal(`0x${'0'.repeat(64)}`)
       await eip4337Safe.validateUserOp(userOp, `0x${'0'.repeat(64)}`, requiredPrefund)
-
-      expect(await eip4337Safe.transactionsReadyToExecute(eip4337Safe.address)).to.equal(expectedIntermediateTxHash)
+      expect(await provider.getStorageAt(eip4337Safe.address, TRANSACTION_TO_EXECUTE_SLOT)).to.equal(expectedIntermediateTxHash)
     })
   })
 
@@ -258,6 +270,7 @@ describe('SafeEIP4337Diatomic', async () => {
 
     it('should revert if called not by the entry point from validateUserOp', async () => {
       const { eip4337Safe, storageSetter, eip4337Diatomic } = await setupTests()
+      const provider = hre.ethers.provider
 
       const safeOp = buildSafeUserOpContractCall(storageSetter, 'setStorage', ['0xbaddad'], eip4337Safe.address, '0', '0', user1.address)
       const safeOpHash = calculateSafeOperationHash(eip4337Diatomic.address, safeOp, await chainId())
@@ -268,10 +281,10 @@ describe('SafeEIP4337Diatomic', async () => {
         signature,
       })
       const requiredPrefund = getRequiredPrefund(userOp)
-      const expectedIntermediateTxHash = calculateIntermediateTxHash(userOp, user1.address, await chainId())
+      const intermediateTxHash = calculateIntermediateTxHash(userOp.callData, userOp.nonce, user1.address, await chainId())
 
       await eip4337Safe.validateUserOp(userOp, `0x${'0'.repeat(64)}`, requiredPrefund)
-      expect(await eip4337Safe.transactionsReadyToExecute(eip4337Safe.address)).to.equal(expectedIntermediateTxHash)
+      expect(await provider.getStorageAt(eip4337Safe.address, TRANSACTION_TO_EXECUTE_SLOT)).to.equal(intermediateTxHash)
 
       await expect(user2.sendTransaction({ to: eip4337Safe.address, data: userOp.callData })).to.be.reverted
     })
@@ -300,6 +313,7 @@ describe('SafeEIP4337Diatomic', async () => {
 
     it('should execute contract calls', async () => {
       const { eip4337Safe, eip4337Diatomic, storageSetter } = await setupTests()
+      const provider = hre.ethers.provider
 
       const safeOp = buildSafeUserOpContractCall(storageSetter, 'setStorage', ['0xbaddad'], eip4337Safe.address, '0', '0', user1.address)
       const safeOpHash = calculateSafeOperationHash(eip4337Diatomic.address, safeOp, await chainId())
@@ -310,10 +324,10 @@ describe('SafeEIP4337Diatomic', async () => {
         signature,
       })
       const requiredPrefund = getRequiredPrefund(userOp)
-      const expectedIntermediateTxHash = calculateIntermediateTxHash(userOp, user1.address, await chainId())
+      const expectedIntermediateTxHash = calculateIntermediateTxHash(userOp.callData, userOp.nonce, user1.address, await chainId())
 
       await eip4337Safe.validateUserOp(userOp, `0x${'0'.repeat(64)}`, requiredPrefund)
-      expect(await eip4337Safe.transactionsReadyToExecute(eip4337Safe.address)).to.equal(expectedIntermediateTxHash)
+      expect(await provider.getStorageAt(eip4337Safe.address, TRANSACTION_TO_EXECUTE_SLOT)).to.equal(expectedIntermediateTxHash)
 
       await user1.sendTransaction({ to: eip4337Safe.address, data: userOp.callData, gasLimit: userOp.callGas })
 
@@ -328,6 +342,7 @@ describe('SafeEIP4337Diatomic', async () => {
 
     it('should reset transactionsReadyToExecute mapping after executing a transaction', async () => {
       const { eip4337Safe, eip4337Diatomic, storageSetter } = await setupTests()
+      const provider = hre.ethers.provider
 
       const safeOp = buildSafeUserOpContractCall(storageSetter, 'setStorage', ['0xbaddad'], eip4337Safe.address, '0', '0', user1.address)
       const safeOpHash = calculateSafeOperationHash(eip4337Diatomic.address, safeOp, await chainId())
@@ -338,14 +353,14 @@ describe('SafeEIP4337Diatomic', async () => {
         signature,
       })
       const requiredPrefund = getRequiredPrefund(userOp)
-      const expectedIntermediateTxHash = calculateIntermediateTxHash(userOp, user1.address, await chainId())
+      const expectedIntermediateTxHash = calculateIntermediateTxHash(userOp.callData, userOp.nonce, user1.address, await chainId())
 
       await eip4337Safe.validateUserOp(userOp, `0x${'0'.repeat(64)}`, requiredPrefund)
-      expect(await eip4337Safe.transactionsReadyToExecute(eip4337Safe.address)).to.equal(expectedIntermediateTxHash)
+      expect(await provider.getStorageAt(eip4337Safe.address, TRANSACTION_TO_EXECUTE_SLOT)).to.equal(expectedIntermediateTxHash)
 
       await user1.sendTransaction({ to: eip4337Safe.address, data: userOp.callData, gasLimit: userOp.callGas })
 
-      expect(await eip4337Safe.transactionsReadyToExecute(eip4337Safe.address)).to.equal(`0x${'0'.repeat(64)}`)
+      expect(await provider.getStorageAt(eip4337Safe.address, TRANSACTION_TO_EXECUTE_SLOT)).to.equal(`0x${'0'.repeat(64)}`)
     })
   })
 })

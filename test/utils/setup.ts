@@ -10,6 +10,14 @@ export const eip4337DiatomicContract = async () => {
   return await hre.ethers.getContractFactory('SafeEIP4337Diatomic')
 }
 
+export const eip4337DiatomicExposedDeployment = async () => {
+  return await deployments.get('DiatomicExposed')
+}
+
+export const eip4337DiatomicExposedContract = async () => {
+  return await hre.ethers.getContractFactory('DiatomicExposed')
+}
+
 export const getSafeAtAddress = async (address: string) => {
   const safeMock = await hre.ethers.getContractFactory('GnosisSafeMock')
 
@@ -26,6 +34,14 @@ export const getTestSafe = async (deployer: Signer, fallbackHandler?: string, mo
 
 export const getEip4337Diatomic = async () => {
   return (await eip4337DiatomicContract()).attach((await eip4337DiatomicDeployment()).address)
+}
+
+export const getEip4337DiatomicExposed = async (deployer: Signer) => {
+  const factory = await eip4337DiatomicExposedContract()
+  const factoryWithDeployer = factory.connect(deployer)
+  const eip4337DiatomicExposed = factoryWithDeployer.deploy()
+
+  return eip4337DiatomicExposed
 }
 
 export const getTestStorageSetter = async (signer: Signer) => {

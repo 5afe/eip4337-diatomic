@@ -9,8 +9,8 @@ import {
   getSafeAtAddress,
   getStorageSetterAtAddress,
   getTestStorageSetter,
-} from '../utils/setup'
-import { buildSignatureBytes, signHash } from '../../src/utils/execution'
+} from '../test/utils/setup'
+import { buildSignatureBytes, signHash } from '../src/utils/execution'
 import {
   buildSafeUserOp,
   buildSafeUserOpContractCall,
@@ -20,9 +20,9 @@ import {
   calculateIntermediateTxHash,
   buildSafeUserOpTransaction,
   getSupportedEntryPoints,
-} from '../../src/utils/userOp'
+} from '../src/utils/userOp'
 import { parseEther } from '@ethersproject/units'
-import { chainId } from '../utils/encoding'
+import { chainId } from '../test/utils/encoding'
 
 const MNEMONIC = process.env.GOERLI_SCRIPT_MNEMONIC
 const SAFE_ADDRESS = process.env.GOERLI_SCRIPT_SAFE_ADDRESS

@@ -2,6 +2,8 @@ import { Contract, Wallet, utils, BigNumber, BigNumberish, Signer, PopulatedTran
 import { TypedDataSigner } from '@ethersproject/abstract-signer'
 import { AddressZero } from '@ethersproject/constants'
 
+export const TRANSACTION_TO_EXECUTE_SLOT = utils.keccak256(utils.toUtf8Bytes('eip4337diatomic.transaction_hash_to_execute'))
+
 export const EIP_DOMAIN = {
   EIP712Domain: [
     { type: 'uint256', name: 'chainId' },

@@ -154,8 +154,8 @@ export const getRequiredPrefund = (userOp: UserOperation): string => {
   return BigNumber.from(getRequiredGas(userOp)).mul(BigNumber.from(userOp.maxFeePerGas)).toString()
 }
 
-export const calculateIntermediateTxHash = (userOp: UserOperation, entryPoint: string, chainId: BigNumberish): string => {
-  return ethersUtils.solidityKeccak256(['bytes', 'uint256', 'address', 'uint256'], [userOp.callData, userOp.nonce, entryPoint, chainId])
+export const calculateIntermediateTxHash = (callData: string, nonce: BigNumberish, entryPoint: string, chainId: BigNumberish): string => {
+  return ethersUtils.solidityKeccak256(['bytes', 'uint256', 'address', 'uint256'], [callData, nonce, entryPoint, chainId])
 }
 
 export const getSupportedEntryPoints = async (provider: ethers.providers.JsonRpcProvider): Promise<string[]> => {

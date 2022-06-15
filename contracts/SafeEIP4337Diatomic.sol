@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-pragma solidity >=0.7.0 <0.9.0;
+pragma solidity >=0.8.0 <0.9.0;
 
-import "@gnosis.pm/safe-contracts/contracts/GnosisSafe.sol";
 import "@gnosis.pm/safe-contracts/contracts/handler/HandlerContext.sol";
 import "./UserOperation.sol";
+import "./interfaces/Safe.sol";
+import "hardhat/console.sol";
 
 /// ERRORS ///
 
@@ -11,7 +12,7 @@ import "./UserOperation.sol";
 error InvalidCaller();
 
 /// @notice Thrown when userOp suggests a mismatching nonce
-error InvalidNonce(uint256 actual, uint256 expected);
+error InvalidNonce(uint256 proposed, uint256 expected);
 
 /// @notice Thrown when the prefund quoted by the entrypoint is larger than one defined in the userOp
 error InvalidPrefund();
@@ -22,16 +23,17 @@ error InvalidTransaction();
 /// @notice Thrown when the transaction from the operation reverts
 error ExecutionFailure();
 
+/// @notice Thrown when a method is called with an invalid opcode. For example, calling a method
+/// that should be called via DELEGATECALL with CALL
+error InvalidCallOpcode();
+
 /// @title SafeEIP4337Diatomic
-/// @author Mikhail Mikheev - <mikhail@gnosis.io>
+/// @author Mikhail Mikheev - @mikhailxyz
 /// @notice Diatomic implementation of EIP-4337 for the Gnosis Safe, consisting of a module and a fallback handler
 contract SafeEIP4337Diatomic is HandlerContext {
     using UserOperationLib for UserOperation;
 
-    enum Operation {
-        Call,
-        DelegateCall
-    }
+    address private immutable diatomicAddress;
 
     bytes32 private constant DOMAIN_SEPARATOR_TYPEHASH = keccak256("EIP712Domain(uint256 chainId,address verifyingContract)");
 
@@ -40,10 +42,13 @@ contract SafeEIP4337Diatomic is HandlerContext {
             "SafeOp(address safe,bytes callData,uint256 nonce,uint256 verificationGas,uint256 preVerificationGas,uint256 maxFeePerGas,uint256 maxPriorityFeePerGas,uint256 callGas,address entryPoint)"
         );
 
+    bytes32 private constant TRANSACTION_TO_EXECUTE_SLOT = keccak256("eip4337diatomic.transaction_hash_to_execute");
+
     mapping(address => uint256) public safeNonces;
-    // A mapping to keep track of transactions hashes ready to be executed, a transaction is marked as such
-    // if `validateUserOp` passes.
-    mapping(address => bytes32) public transactionsReadyToExecute;
+
+    constructor() {
+        diatomicAddress = address(this);
+    }
 
     /// @dev Validates user operation provided by the entry point
     /// @param userOp User operation struct
@@ -70,10 +75,16 @@ contract SafeEIP4337Diatomic is HandlerContext {
         _validateSignatures(entryPoint, userOp);
 
         bytes32 intermediateTxHash = getIntermediateTransactionHash(userOp.callData, safeNonce, entryPoint, block.chainid);
-        transactionsReadyToExecute[safeAddress] = intermediateTxHash;
+
+        Safe(safeAddress).execTransactionFromModule(
+            address(this),
+            0,
+            abi.encodeWithSelector(this.setTransactionToExecute.selector, intermediateTxHash),
+            1
+        );
 
         if (requiredPrefund != 0) {
-            GnosisSafe(safeAddress).execTransactionFromModule(entryPoint, requiredPrefund, "", Enum.Operation.Call);
+            Safe(safeAddress).execTransactionFromModule(entryPoint, requiredPrefund, "", 0);
         }
     }
 
@@ -87,7 +98,7 @@ contract SafeEIP4337Diatomic is HandlerContext {
         address to,
         uint256 value,
         bytes calldata data,
-        Enum.Operation operation
+        uint8 operation
     ) external payable returns (bool success) {
         // we need to strip out msg.sender address appended by HandlerContext contract from the calldata
         bytes memory callData;
@@ -110,13 +121,23 @@ contract SafeEIP4337Diatomic is HandlerContext {
         address entryPoint = _msgSender();
         // `validateUserOp` increased the nonce, so we need to use nonce - 1 for hash calculation
         uint256 safeNonce = safeNonces[safeAddress] - 1;
-        if (transactionsReadyToExecute[safeAddress] != getIntermediateTransactionHash(callData, safeNonce, entryPoint, block.chainid)) {
+
+        Safe safe = Safe(safeAddress);
+        if (
+            bytes32(safe.getStorageAt(uint256(TRANSACTION_TO_EXECUTE_SLOT), 32)) !=
+            getIntermediateTransactionHash(callData, safeNonce, entryPoint, block.chainid)
+        ) {
             revert InvalidTransaction();
         }
 
-        transactionsReadyToExecute[safeAddress] = 0;
+        safe.execTransactionFromModule(
+            address(this),
+            0,
+            abi.encodeWithSelector(this.setTransactionToExecute.selector, TRANSACTION_TO_EXECUTE_SLOT, bytes32(0)),
+            1
+        );
 
-        success = GnosisSafe(safeAddress).execTransactionFromModule(to, value, data, operation);
+        success = safe.execTransactionFromModule(to, value, data, operation);
         if (!success) revert ExecutionFailure();
     }
 
@@ -234,6 +255,18 @@ contract SafeEIP4337Diatomic is HandlerContext {
         );
         bytes32 operationHash = keccak256(operationData);
 
-        GnosisSafe(payable(userOp.sender)).checkSignatures(operationHash, operationData, userOp.signature);
+        Safe(payable(userOp.sender)).checkSignatures(operationHash, operationData, userOp.signature);
+    }
+
+    function setTransactionToExecute(bytes32 txHash) public {
+        if (address(this) == diatomicAddress) {
+            revert InvalidCallOpcode();
+        }
+
+        bytes32 slot = TRANSACTION_TO_EXECUTE_SLOT;
+        // solhint-disable-next-line no-inline-assembly
+        assembly {
+            sstore(slot, txHash)
+        }
     }
 }
