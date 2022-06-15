@@ -59,7 +59,7 @@ export const buildSafeUserOp = (template: OptionalExceptFor<SafeUserOperation, '
     nonce: template.nonce,
     entryPoint: template.entryPoint,
     callData: template.callData || '0x',
-    verificationGas: template.verificationGas || '1000000',
+    verificationGas: template.verificationGas || '300000',
     preVerificationGas: template.preVerificationGas || '21000',
     callGas: template.callGas || '2000000',
     maxFeePerGas: template.maxFeePerGas || '10000000000',
@@ -151,6 +151,11 @@ export const getRequiredGas = (userOp: UserOperation): string => {
 }
 
 export const getRequiredPrefund = (userOp: UserOperation): string => {
+  console.log({
+    requiredGas: getRequiredGas(userOp),
+    requiredPrefund: BigNumber.from(getRequiredGas(userOp)).mul(BigNumber.from(userOp.maxFeePerGas)).toString(),
+  })
+
   return BigNumber.from(getRequiredGas(userOp)).mul(BigNumber.from(userOp.maxFeePerGas)).toString()
 }
 

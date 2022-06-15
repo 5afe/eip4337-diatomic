@@ -1,32 +1,18 @@
-import { BigNumber } from 'ethers'
-import { AddressZero } from '@ethersproject/constants'
-import hre, { deployments } from 'hardhat'
+import hre from 'hardhat'
 import '@nomiclabs/hardhat-ethers'
-import {
-  deployContract,
-  getTestSafe,
-  getEip4337Diatomic,
-  getSafeAtAddress,
-  getStorageSetterAtAddress,
-  getTestStorageSetter,
-} from '../test/utils/setup'
+import { getTestSafe, getEip4337Diatomic, getSafeAtAddress, getStorageSetterAtAddress, getTestStorageSetter } from '../test/utils/setup'
 import { buildSignatureBytes, signHash } from '../src/utils/execution'
 import {
   buildSafeUserOp,
-  buildSafeUserOpContractCall,
   getRequiredPrefund,
   calculateSafeOperationHash,
   buildUserOperationFromSafeUserOperation,
-  calculateIntermediateTxHash,
-  buildSafeUserOpTransaction,
   getSupportedEntryPoints,
 } from '../src/utils/userOp'
-import { parseEther } from '@ethersproject/units'
 import { chainId } from '../test/utils/encoding'
 
 const MNEMONIC = process.env.GOERLI_SCRIPT_MNEMONIC
 const SAFE_ADDRESS = process.env.GOERLI_SCRIPT_SAFE_ADDRESS
-const STORAGE_SETTER_ADDRESS = process.env.GOERLI_SCRIPT_STORAGE_SETTER_ADDRESS
 const DEBUG = process.env.GOERLI_SCRIPT_DEBUG || false
 
 const runOp = async () => {
@@ -38,19 +24,15 @@ const runOp = async () => {
   const eip4337Diatomic = await getEip4337Diatomic()
   const safe = await (SAFE_ADDRESS ? getSafeAtAddress(SAFE_ADDRESS) : getTestSafe(user1, eip4337Diatomic.address, eip4337Diatomic.address))
   const eip4337Safe = eip4337Diatomic.attach(safe.address)
-  const storageSetter = await (STORAGE_SETTER_ADDRESS ? getStorageSetterAtAddress(STORAGE_SETTER_ADDRESS) : getTestStorageSetter(user1))
   const entryPoints = await getSupportedEntryPoints(accountAbstractionProvider)
-  const safeOp = buildSafeUserOpContractCall(
-    storageSetter,
-    'setStorage',
-    [safe.address],
-    eip4337Safe.address,
-    '0',
-    '0',
-    entryPoints[0],
-    false,
-    { maxFeePerGas: '10', maxPriorityFeePerGas: '5' },
-  )
+  const safeOp = buildSafeUserOp({
+    nonce: '0',
+    safe: safe.address,
+    entryPoint: entryPoints[0],
+    maxFeePerGas: '4000000000',
+    maxPriorityFeePerGas: '4000000000',
+    callGas: '500000',
+  })
   const safeOpHash = calculateSafeOperationHash(eip4337Diatomic.address, safeOp, await chainId())
   let signature = buildSignatureBytes([await signHash(user1, safeOpHash)])
   signature = `${signature.slice(0, -2)}20`
@@ -65,7 +47,6 @@ const runOp = async () => {
     console.log('Usign account with address:', user1.address)
     console.log('Using EIP4337Diatomic deployed at:', eip4337Diatomic.address)
     console.log('Using Safe contract deployed at:', safe.address)
-    console.log('Using StorageSetter deployed at:', storageSetter.address)
     console.log('Using entrypoint at:', entryPoints[0])
     console.log(
       'Encoded validateUserOp call:',
@@ -74,10 +55,6 @@ const runOp = async () => {
   }
 
   await accountAbstractionProvider.send('eth_sendUserOperation', [userOp, entryPoints[0]])
-
-  console.log(
-    await hre.ethers.provider.getStorageAt(storageSetter.address, '0x7373737373737373737373737373737373737373737373737373737373737373'),
-  )
 }
 
 runOp()
