@@ -93,13 +93,12 @@ contract SafeEIP4337Diatomic is HandlerContext {
     /// @param value Native token value of transaction
     /// @param data Data payload of transaction.
     /// @param operation Operation type of transaction.
-    /// @return success True if the transaction succeeded
     function execTransaction(
         address to,
         uint256 value,
         bytes calldata data,
         uint8 operation
-    ) external payable returns (bool success) {
+    ) external payable {
         // we need to strip out msg.sender address appended by HandlerContext contract from the calldata
         bytes memory callData;
         // solhint-disable-next-line no-inline-assembly
@@ -130,15 +129,9 @@ contract SafeEIP4337Diatomic is HandlerContext {
             revert InvalidTransaction();
         }
 
-        safe.execTransactionFromModule(
-            address(this),
-            0,
-            abi.encodeWithSelector(this.setTransactionToExecute.selector, TRANSACTION_TO_EXECUTE_SLOT, bytes32(0)),
-            1
-        );
+        safe.execTransactionFromModule(address(this), 0, abi.encodeWithSelector(this.setTransactionToExecute.selector, bytes32(0)), 1);
 
-        success = safe.execTransactionFromModule(to, value, data, operation);
-        if (!success) revert ExecutionFailure();
+        if (!safe.execTransactionFromModule(to, value, data, operation)) revert ExecutionFailure();
     }
 
     function domainSeparator() public view returns (bytes32) {
