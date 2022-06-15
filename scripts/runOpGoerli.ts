@@ -1,3 +1,4 @@
+import { parseEther } from '@ethersproject/units'
 import hre from 'hardhat'
 import '@nomiclabs/hardhat-ethers'
 import { getTestSafe, getEip4337Diatomic, getSafeAtAddress, getStorageSetterAtAddress, getTestStorageSetter } from '../test/utils/setup'
@@ -8,6 +9,7 @@ import {
   calculateSafeOperationHash,
   buildUserOperationFromSafeUserOperation,
   getSupportedEntryPoints,
+  buildSafeUserOpTransaction,
 } from '../src/utils/userOp'
 import { chainId } from '../test/utils/encoding'
 
@@ -25,18 +27,25 @@ const runOp = async () => {
   const safe = await (SAFE_ADDRESS ? getSafeAtAddress(SAFE_ADDRESS) : getTestSafe(user1, eip4337Diatomic.address, eip4337Diatomic.address))
   const eip4337Safe = eip4337Diatomic.attach(safe.address)
   const entryPoints = await getSupportedEntryPoints(accountAbstractionProvider)
-  const safeOp = buildSafeUserOp({
-    nonce: '0',
-    safe: safe.address,
-    entryPoint: entryPoints[0],
-    maxFeePerGas: '4000000000',
-    maxPriorityFeePerGas: '4000000000',
-    callGas: '500000',
-  })
+  const safeOp = buildSafeUserOpTransaction(
+    safe.address,
+    '0x02270bd144e70cE6963bA02F575776A16184E1E6',
+    parseEther('0.1'),
+    '0x',
+    '0',
+    entryPoints[1],
+    false,
+    {
+      maxFeePerGas: '9000000000',
+      maxPriorityFeePerGas: '9000000000',
+      callGas: '500000',
+    },
+  )
+
   const safeOpHash = calculateSafeOperationHash(eip4337Diatomic.address, safeOp, await chainId())
   let signature = buildSignatureBytes([await signHash(user1, safeOpHash)])
-  signature = `${signature.slice(0, -2)}20`
-
+  signature = `${signature.slice(0, -2)}1f`
+  console.log({ safeOpHash, signature })
   const userOp = buildUserOperationFromSafeUserOperation({
     safeAddress: eip4337Safe.address,
     safeOp,
@@ -47,14 +56,16 @@ const runOp = async () => {
     console.log('Usign account with address:', user1.address)
     console.log('Using EIP4337Diatomic deployed at:', eip4337Diatomic.address)
     console.log('Using Safe contract deployed at:', safe.address)
-    console.log('Using entrypoint at:', entryPoints[0])
+    console.log('Using entrypoint at:', entryPoints[1])
     console.log(
       'Encoded validateUserOp call:',
       eip4337Diatomic.interface.encodeFunctionData('validateUserOp', [userOp, `0x${'0'.padStart(64, '0')}`, getRequiredPrefund(userOp)]),
     )
   }
 
-  await accountAbstractionProvider.send('eth_sendUserOperation', [userOp, entryPoints[0]])
+  await accountAbstractionProvider.send('eth_sendUserOperation', [userOp, entryPoints[1]])
+
+  console.log('woohoo')
 }
 
 runOp()

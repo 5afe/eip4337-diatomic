@@ -60,7 +60,7 @@ export const buildSafeUserOp = (template: OptionalExceptFor<SafeUserOperation, '
     entryPoint: template.entryPoint,
     callData: template.callData || '0x',
     verificationGas: template.verificationGas || '300000',
-    preVerificationGas: template.preVerificationGas || '21000',
+    preVerificationGas: template.preVerificationGas || '30000',
     callGas: template.callGas || '2000000',
     maxFeePerGas: template.maxFeePerGas || '10000000000',
     maxPriorityFeePerGas: template.maxPriorityFeePerGas || '10000000000',
