@@ -43,8 +43,7 @@ contract SafeEIP4337Diatomic is HandlerContext {
         );
 
     bytes32 private constant TRANSACTION_TO_EXECUTE_SLOT = keccak256("eip4337diatomic.transaction_hash_to_execute");
-
-    mapping(address => uint256) public safeNonces;
+    bytes32 private constant SAFE_EIP4337_NONCE_SLOT = keccak256("eip4337diatomic.nonce");
 
     constructor() {
         diatomicAddress = address(this);
@@ -65,8 +64,9 @@ contract SafeEIP4337Diatomic is HandlerContext {
         if (safeAddress != msg.sender) revert InvalidCaller();
 
         // We need to increase the nonce to make it impossible to drain the safe by making it send prefunds for the same transaction
-        uint256 safeNonce = safeNonces[safeAddress]++;
+        uint256 safeNonce = getSafeEip4337Nonce(safeAddress);
         if (safeNonce != userOp.nonce) revert InvalidNonce(userOp.nonce, safeNonce);
+        Safe(safeAddress).execTransactionFromModule(address(this), 0, abi.encodeWithSelector(this.setNonce.selector, safeNonce + 1), 1);
 
         // We need to make sure that the entryPoint's requested prefund is in bounds
         if (requiredPrefund > userOp.requiredPreFund()) revert InvalidPrefund();
@@ -75,7 +75,6 @@ contract SafeEIP4337Diatomic is HandlerContext {
         _validateSignatures(entryPoint, userOp);
 
         bytes32 intermediateTxHash = getIntermediateTransactionHash(userOp.callData, safeNonce, entryPoint, block.chainid);
-
         Safe(safeAddress).execTransactionFromModule(
             address(this),
             0,
@@ -119,7 +118,7 @@ contract SafeEIP4337Diatomic is HandlerContext {
         address payable safeAddress = payable(msg.sender);
         address entryPoint = _msgSender();
         // `validateUserOp` increased the nonce, so we need to use nonce - 1 for hash calculation
-        uint256 safeNonce = safeNonces[safeAddress] - 1;
+        uint256 safeNonce = getSafeEip4337Nonce(safeAddress) - 1;
 
         Safe safe = Safe(safeAddress);
         if (
@@ -251,6 +250,14 @@ contract SafeEIP4337Diatomic is HandlerContext {
         Safe(payable(userOp.sender)).checkSignatures(operationHash, operationData, userOp.signature);
     }
 
+    function getSafeEip4337Nonce(address safe) internal view returns (uint256 nonce) {
+        bytes memory nonceBytes = Safe(safe).getStorageAt(uint256(SAFE_EIP4337_NONCE_SLOT), 32);
+
+        assembly {
+            nonce := mload(add(nonceBytes, 32))
+        }
+    }
+
     function setTransactionToExecute(bytes32 txHash) public {
         if (address(this) == diatomicAddress) {
             revert InvalidCallOpcode();
@@ -260,6 +267,18 @@ contract SafeEIP4337Diatomic is HandlerContext {
         // solhint-disable-next-line no-inline-assembly
         assembly {
             sstore(slot, txHash)
+        }
+    }
+
+    function setNonce(uint256 nonce) public {
+        if (address(this) == diatomicAddress) {
+            revert InvalidCallOpcode();
+        }
+
+        bytes32 slot = SAFE_EIP4337_NONCE_SLOT;
+        // solhint-disable-next-line no-inline-assembly
+        assembly {
+            sstore(slot, nonce)
         }
     }
 }

@@ -43,7 +43,7 @@ const runOp = async () => {
   const safeOp = buildSafeUserOpContractCall(
     storageSetter,
     'setStorage',
-    ['123456789'],
+    [safe.address],
     eip4337Safe.address,
     '0',
     '0',
@@ -52,7 +52,9 @@ const runOp = async () => {
     { maxFeePerGas: '10', maxPriorityFeePerGas: '5' },
   )
   const safeOpHash = calculateSafeOperationHash(eip4337Diatomic.address, safeOp, await chainId())
-  const signature = buildSignatureBytes([await signHash(user1, safeOpHash)])
+  let signature = buildSignatureBytes([await signHash(user1, safeOpHash)])
+  signature = `${signature.slice(0, -2)}20`
+
   const userOp = buildUserOperationFromSafeUserOperation({
     safeAddress: eip4337Safe.address,
     safeOp,

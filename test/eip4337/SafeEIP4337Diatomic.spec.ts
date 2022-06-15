@@ -5,7 +5,7 @@ import { expect } from 'chai'
 import hre, { deployments, waffle } from 'hardhat'
 import '@nomiclabs/hardhat-ethers'
 import { deployContract, getTestSafe, getEip4337Diatomic, getEip4337DiatomicExposed } from '../utils/setup'
-import { buildSignatureBytes, signHash, TRANSACTION_TO_EXECUTE_SLOT } from '../../src/utils/execution'
+import { buildSignatureBytes, signHash, TRANSACTION_TO_EXECUTE_SLOT, SAFE_EIP4337_NONCE_SLOT } from '../../src/utils/execution'
 import {
   buildSafeUserOp,
   buildSafeUserOpContractCall,
@@ -222,8 +222,9 @@ describe('SafeEIP4337Diatomic', async () => {
 
     it('should increase the nonce', async () => {
       const { eip4337Safe, eip4337Diatomic } = await setupTests()
+      const provider = hre.ethers.provider
 
-      expect(await eip4337Safe.safeNonces(eip4337Safe.address)).to.equal(0)
+      expect(await provider.getStorageAt(eip4337Safe.address, SAFE_EIP4337_NONCE_SLOT)).to.equal(`0x${'0'.repeat(64)}`)
       const safeOp = buildSafeUserOp({ safe: eip4337Safe.address, nonce: '0', entryPoint: user1.address })
       const safeOpHash = calculateSafeOperationHash(eip4337Diatomic.address, safeOp, await chainId())
       const signature = buildSignatureBytes([await signHash(user1, safeOpHash)])
@@ -235,7 +236,7 @@ describe('SafeEIP4337Diatomic', async () => {
       const requiredPrefund = getRequiredPrefund(userOp)
 
       await eip4337Safe.validateUserOp(userOp, `0x${'0'.repeat(64)}`, requiredPrefund)
-      expect(await eip4337Safe.safeNonces(eip4337Safe.address)).to.equal(1)
+      expect(await provider.getStorageAt(eip4337Safe.address, SAFE_EIP4337_NONCE_SLOT)).to.equal(`0x${'1'.padStart(64, '0')}`)
     })
 
     it('should mark the transaction as ready to be executed', async () => {
@@ -251,6 +252,7 @@ describe('SafeEIP4337Diatomic', async () => {
         signature,
       })
       const requiredPrefund = getRequiredPrefund(userOp)
+
       const expectedIntermediateTxHash = calculateIntermediateTxHash(userOp.callData, userOp.nonce, user1.address, await chainId())
 
       expect(await provider.getStorageAt(eip4337Safe.address, TRANSACTION_TO_EXECUTE_SLOT)).to.equal(`0x${'0'.repeat(64)}`)

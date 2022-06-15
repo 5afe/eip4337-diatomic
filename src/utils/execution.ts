@@ -3,6 +3,7 @@ import { TypedDataSigner } from '@ethersproject/abstract-signer'
 import { AddressZero } from '@ethersproject/constants'
 
 export const TRANSACTION_TO_EXECUTE_SLOT = utils.keccak256(utils.toUtf8Bytes('eip4337diatomic.transaction_hash_to_execute'))
+export const SAFE_EIP4337_NONCE_SLOT = utils.keccak256(utils.toUtf8Bytes('eip4337diatomic.nonce'))
 
 export const EIP_DOMAIN = {
   EIP712Domain: [
