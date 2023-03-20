@@ -74,7 +74,7 @@ const userConfig: HardhatUserConfig = {
     },
     goerli: {
       ...sharedNetworkConfig,
-      url: `https://rpc.goerli.mudit.blog`,
+      url: `https://goerli.infura.io/v3/${INFURA_KEY}`,
     },
     ropsten: {
       ...sharedNetworkConfig,

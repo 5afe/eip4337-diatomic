@@ -238,11 +238,11 @@ contract SafeEIP4337Diatomic is HandlerContext {
             payable(userOp.sender),
             userOp.callData,
             userOp.nonce,
-            userOp.verificationGas,
+            userOp.verificationGasLimit,
             userOp.preVerificationGas,
             userOp.maxFeePerGas,
             userOp.maxPriorityFeePerGas,
-            userOp.callGas,
+            userOp.callGasLimit,
             entryPoint
         );
         bytes32 operationHash = keccak256(operationData);

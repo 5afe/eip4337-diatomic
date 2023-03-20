@@ -6,6 +6,10 @@ export const eip4337DiatomicDeployment = async () => {
   return await deployments.get('SafeEIP4337Diatomic')
 }
 
+export const eip4337ModuleDeployment = async () => {
+  return await deployments.get('EIP4337Module')
+}
+
 export const eip4337DiatomicContract = async () => {
   return await hre.ethers.getContractFactory('SafeEIP4337Diatomic')
 }
