@@ -12,7 +12,7 @@ import {
   signSafeOp,
 } from '../src/utils/userOp'
 import { chainId } from '../test/utils/encoding'
-import { eip4337ModuleDeployment } from '../test/utils/setup'
+import { getSimple4337Module } from '../test/utils/setup'
 
 const DEBUG = process.env.SCRIPT_DEBUG || false
 const MNEMONIC = process.env.SCRIPT_MNEMONIC
@@ -31,7 +31,7 @@ const runOp = async () => {
   // This node only allows eth_chainId, eth_getSupportedEntrypoints, eth_sendUserOperation
   // All other methods return an error
   const accountAbstractionProvider = new hre.ethers.providers.JsonRpcProvider(BUNLDER_URL)
-  const moduleAddress = MODULE_ADDRESS ?? ((await eip4337ModuleDeployment()).address)
+  const moduleAddress = MODULE_ADDRESS ?? ((await getSimple4337Module()).address)
   const safeAddress = SAFE_ADDRESS!!
   const entryPoints = await getSupportedEntryPoints(accountAbstractionProvider)
   const entryPoint = entryPoints[0]

@@ -7,7 +7,7 @@ import "../UserOperation.sol";
 import "@gnosis.pm/safe-contracts/contracts/proxies/GnosisSafeProxyFactory.sol";
 
 contract SafeMock {
-    address immutable public supportedEntryPoint;
+    address public immutable supportedEntryPoint;
 
     address public singleton;
     address public owner;
@@ -19,7 +19,7 @@ contract SafeMock {
         supportedEntryPoint = entryPoint;
     }
 
-    function setup(address _fallbackHandler, address _module) virtual public {
+    function setup(address _fallbackHandler, address _module) public virtual {
         require(owner == address(0), "Already setup");
         owner = msg.sender;
         fallbackHandler = _fallbackHandler;
@@ -123,7 +123,7 @@ contract Safe4337Mock is SafeMock {
             "SafeOp(address safe,bytes callData,uint256 nonce,uint256 verificationGas,uint256 preVerificationGas,uint256 maxFeePerGas,uint256 maxPriorityFeePerGas,uint256 callGas,address entryPoint)"
         );
 
-    bytes4 immutable public expectedExecutionFunctionId;
+    bytes4 public immutable expectedExecutionFunctionId;
 
     constructor(address entryPoint) SafeMock(entryPoint) {
         expectedExecutionFunctionId = bytes4(keccak256("execTransactionFromModule(address,uint256,bytes,uint8)"));
@@ -136,7 +136,7 @@ contract Safe4337Mock is SafeMock {
         UserOperation calldata userOp,
         bytes32,
         uint256 requiredPrefund
-    ) external returns (uint256){
+    ) external returns (uint256) {
         address entryPoint = msg.sender;
         require(entryPoint == supportedEntryPoint, "Unsupported entry point");
 
@@ -209,22 +209,25 @@ contract Safe4337Mock is SafeMock {
         uint256 callGas,
         address entryPoint
     ) public view returns (bytes32) {
-        return keccak256(encodeOperationData(
-            safe,
-            callData,
-            nonce,
-            verificationGas,
-            preVerificationGas,
-            maxFeePerGas,
-            maxPriorityFeePerGas,
-            callGas,
-            entryPoint
-        ));
+        return
+            keccak256(
+                encodeOperationData(
+                    safe,
+                    callData,
+                    nonce,
+                    verificationGas,
+                    preVerificationGas,
+                    maxFeePerGas,
+                    maxPriorityFeePerGas,
+                    callGas,
+                    entryPoint
+                )
+            );
     }
 
-    function chainId() public view returns(uint256) {
+    function chainId() public view returns (uint256) {
         return block.chainid;
-    } 
+    }
 
     /// @dev Validates that the user operation is correctly signed. Users methods from Gnosis Safe contract, reverts if signatures are invalid
     /// @param entryPoint Address of the entry point
@@ -245,7 +248,7 @@ contract Safe4337Mock is SafeMock {
 
         checkSignatures(operationHash, operationData, userOp.signature);
     }
-    
+
     mapping(address => mapping(bytes32 => uint64)) private nonces;
 
     function validateReplayProtection(UserOperation calldata userOp) internal {
