@@ -15,24 +15,26 @@ sequenceDiagram
     P-->>S: Load Safe logic
         Note over P, M: Gas overhead for calls and storage access
     P->>+M: Forward validation
-    Note over P, M: Load fallback handler ~2100 gas<br>Intital module access ~2600 gas<br>Call to module ~700 gas
+    Note over P, M: Load fallback handler ~2100 gas<br>Intital module access ~2600 gas
     M->>P: Check signatures
     P-->>S: Load Safe logic
-    Note over P, M: Call to Safe Proxy ~700 gas<br>Load logic ~800 gas
+    Note over P, M: Call to Safe Proxy ~100 gas<br>Load logic ~100 gas
     opt Pay required fee
         M->>P: Trigger fee payment
         P-->>S: Load Safe logic
-        Note over P, M: Module check ~2100 gas<br>Call to Safe Proxy ~700 gas<br>Load logic ~800 gas
+        Note over P, M: Module check ~2100 gas<br>Call to Safe Proxy ~100 gas<br>Load logic ~100 gas
         P->>E: Perform fee payment
     end
     M-->>-P: Validation response
     P-->>-E: Validation response
-        Note over P, M: Total gas overhead<br>Without fee payment ~6.900 gas<br>With fee payment ~9.700 gas
+        Note over P, M: Total gas overhead<br>Without fee payment ~4.900 gas<br>With fee payment ~7.200 gas
     Note over B, T: This execution flow is similar<br>for native 4337 support<br>therefore there is no gas overhead
     E->>+P: executeTransactionFromModule
     P-->>S: Load Safe logic
     P->>-T: Perform transaction
 ```
+
+The gas overhead is based on [EIP-2929](https://eips.ethereum.org/EIPS/eip-2929)
 
 Note: it is possible to reduce the gas overhead by using [access lists](https://eips.ethereum.org/EIPS/eip-2930).
 
