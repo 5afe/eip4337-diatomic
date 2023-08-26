@@ -1,5 +1,6 @@
-import { Contract, BigNumber, utils as ethersUtils, BigNumberish, ethers } from 'ethers'
-import { AddressZero } from '@ethersproject/constants'
+import { Contract, BigNumber, utils as ethersUtils, BigNumberish, ethers, Signer } from 'ethers'
+import { TypedDataSigner } from '@ethersproject/abstract-signer'
+import { SafeSignature } from './execution'
 
 type OptionalExceptFor<T, TRequired extends keyof T = keyof T> = Partial<Pick<T, Exclude<keyof T, TRequired>>> &
   Required<Pick<T, TRequired>>
@@ -9,13 +10,12 @@ export interface UserOperation {
   nonce: string
   initCode: string
   callData: string
-  callGas: string
-  verificationGas: string
+  callGasLimit: string
+  verificationGasLimit: string
   preVerificationGas: string
   maxFeePerGas: string
   maxPriorityFeePerGas: string
-  paymaster: string
-  paymasterData: string
+  paymasterAndData: string
   signature: string
 }
 
@@ -32,7 +32,7 @@ export interface SafeUserOperation {
 }
 
 export const EIP712_SAFE_OPERATION_TYPE = {
-  // "SafeOp(bytes callData,uint256 nonce,uint256 verificationGas,uint256 preVerificationGas,uint256 maxFeePerGas,uint256 maxPriorityFeePerGas,uint256 callGas,address entryPoint)"
+  // "SafeOp(address safe,bytes callData,uint256 nonce,uint256 verificationGas,uint256 preVerificationGas,uint256 maxFeePerGas,uint256 maxPriorityFeePerGas,uint256 callGas,address entryPoint)"
   SafeOp: [
     { type: 'address', name: 'safe' },
     { type: 'bytes', name: 'callData' },
@@ -50,6 +50,18 @@ export const calculateSafeOperationHash = (eip4337ModuleAddress: string, safeOp:
   return ethersUtils._TypedDataEncoder.hash({ chainId, verifyingContract: eip4337ModuleAddress }, EIP712_SAFE_OPERATION_TYPE, safeOp)
 }
 
+export const signSafeOp = async(
+  signer: Signer & TypedDataSigner,
+  moduleAddress: string,
+  safeOp: SafeUserOperation,
+  chainId: BigNumberish
+  ): Promise<SafeSignature> => {
+    return {
+      signer: await signer.getAddress(),
+      data: await signer._signTypedData({ verifyingContract: moduleAddress, chainId }, EIP712_SAFE_OPERATION_TYPE, safeOp),
+    }
+}
+
 export const buildSafeUserOp = (template: OptionalExceptFor<SafeUserOperation, 'safe' | 'nonce' | 'entryPoint'>): SafeUserOperation => {
   // use same maxFeePerGas and maxPriorityFeePerGas to ease testing prefund validation
   // otherwise it's tricky to calculate the prefund because of dynamic parameters like block.basefee
@@ -60,7 +72,7 @@ export const buildSafeUserOp = (template: OptionalExceptFor<SafeUserOperation, '
     entryPoint: template.entryPoint,
     callData: template.callData || '0x',
     verificationGas: template.verificationGas || '300000',
-    preVerificationGas: template.preVerificationGas || '30000',
+    preVerificationGas: template.preVerificationGas || '50000',
     callGas: template.callGas || '2000000',
     maxFeePerGas: template.maxFeePerGas || '10000000000',
     maxPriorityFeePerGas: template.maxPriorityFeePerGas || '10000000000',
@@ -78,9 +90,9 @@ export const buildSafeUserOpTransaction = (
   overrides?: Partial<SafeUserOperation>,
 ): SafeUserOperation => {
   const abi = [
-    'function execTransaction(address to, uint256 value, bytes calldata data, uint8 operation) external payable returns (bool success)',
+    'function execTransactionFromModule(address to, uint256 value, bytes calldata data, uint8 operation) external payable returns (bool success)',
   ]
-  const callData = new ethersUtils.Interface(abi).encodeFunctionData('execTransaction', [to, value, data, delegateCall ? 1 : 0])
+  const callData = new ethersUtils.Interface(abi).encodeFunctionData('execTransactionFromModule', [to, value, data, delegateCall ? 1 : 0])
 
   return buildSafeUserOp(
     Object.assign(
@@ -122,17 +134,16 @@ export const buildUserOperationFromSafeUserOperation = ({
   return {
     nonce: safeOp.nonce,
     callData: safeOp.callData || '0x',
-    verificationGas: safeOp.verificationGas || '1000000',
-    preVerificationGas: safeOp.preVerificationGas || '21000',
-    callGas: safeOp.callGas || '2000000',
+    verificationGasLimit: safeOp.verificationGas || '300000',
+    preVerificationGas: safeOp.preVerificationGas || '50000',
+    callGasLimit: safeOp.callGas || '2000000',
     // use same maxFeePerGas and maxPriorityFeePerGas to ease testing prefund validation
     // otherwise it's tricky to calculate the prefund because of dynamic parameters like block.basefee
     // check UserOperation.sol#gasPrice()
     maxFeePerGas: safeOp.maxFeePerGas || '5000000000',
     maxPriorityFeePerGas: safeOp.maxPriorityFeePerGas || '1500000000',
     initCode: '0x',
-    paymaster: AddressZero,
-    paymasterData: '0x',
+    paymasterAndData: '0x',
     sender: safeOp.safe,
     signature: signature,
   }
@@ -140,12 +151,13 @@ export const buildUserOperationFromSafeUserOperation = ({
 
 export const getRequiredGas = (userOp: UserOperation): string => {
   let multiplier = 3
-  if (userOp.paymaster === AddressZero) {
+  if (userOp.paymasterAndData === "0x") {
     multiplier = 1
   }
+  console.log({multiplier})
 
-  return BigNumber.from(userOp.callGas)
-    .add(BigNumber.from(userOp.verificationGas).mul(multiplier))
+  return BigNumber.from(userOp.callGasLimit)
+    .add(BigNumber.from(userOp.verificationGasLimit).mul(multiplier))
     .add(userOp.preVerificationGas)
     .toString()
 }
@@ -164,7 +176,7 @@ export const calculateIntermediateTxHash = (callData: string, nonce: BigNumberis
 }
 
 export const getSupportedEntryPoints = async (provider: ethers.providers.JsonRpcProvider): Promise<string[]> => {
-  const supportedEntryPoints = await provider.send('eth_supportedEntryPoints', []).then((ret) => ret.map(ethers.utils.getAddress))
-
-  return supportedEntryPoints
+  const supportedEntryPoints = await provider.send('eth_supportedEntryPoints', [])
+  console.log({supportedEntryPoints})
+  return supportedEntryPoints.map(ethers.utils.getAddress)
 }

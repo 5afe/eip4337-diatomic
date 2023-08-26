@@ -35,4 +35,18 @@ interface Safe {
         bytes memory data,
         bytes memory signatures
     ) external view;
+
+    // Mapping to keep track of all message hashes that have been approve by ALL REQUIRED owners
+    function signedMessages(bytes32 messageHash) external view returns (uint256);
+
+    function domainSeparator() external view returns (bytes32);
+
+    /**
+     * @dev Returns array of modules.
+     * @param start Start of the page.
+     * @param pageSize Maximum number of modules that should be returned.
+     * @return array Array of modules.
+     * @return next Start of the next page.
+     */
+    function getModulesPaginated(address start, uint256 pageSize) external view returns (address[] memory array, address next);
 }

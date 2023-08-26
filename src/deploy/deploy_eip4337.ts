@@ -6,9 +6,30 @@ const deploy: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   const { deployer } = await getNamedAccounts()
   const { deploy } = deployments
 
-  await deploy('SafeEIP4337Diatomic', {
+  const entryPoint = await deploy('TestEntryPoint', {
     from: deployer,
     args: [],
+    log: true,
+    deterministicDeployment: true,
+  })
+
+  await deploy('SafeMock', {
+    from: deployer,
+    args: [entryPoint.address],
+    log: true,
+    deterministicDeployment: true,
+  })
+
+  await deploy('Safe4337Mock', {
+    from: deployer,
+    args: [entryPoint.address],
+    log: true,
+    deterministicDeployment: true,
+  })
+
+  await deploy('Simple4337Module', {
+    from: deployer,
+    args: [entryPoint.address],
     log: true,
     deterministicDeployment: true,
   })

@@ -20,13 +20,12 @@ struct UserOperation {
     uint256 nonce;
     bytes initCode;
     bytes callData;
-    uint256 callGas;
-    uint256 verificationGas;
+    uint256 callGasLimit;
+    uint256 verificationGasLimit;
     uint256 preVerificationGas;
     uint256 maxFeePerGas;
     uint256 maxPriorityFeePerGas;
-    address paymaster;
-    bytes paymasterData;
+    bytes paymasterAndData;
     bytes signature;
 }
 
@@ -59,18 +58,18 @@ library UserOperationLib {
             //when using a Paymaster, the verificationGas is used also to cover the postOp call.
             // our security model might call postOp eventually twice
             uint256 mul = hasPaymaster(userOp) ? 3 : 1;
-            return userOp.callGas + userOp.verificationGas * mul + userOp.preVerificationGas;
+            return userOp.callGasLimit + userOp.verificationGasLimit * mul + userOp.preVerificationGas;
         }
     }
 
-    function requiredPreFund(UserOperation calldata userOp) internal view returns (uint256 prefund) {
+    function requiredPreFund(UserOperation calldata userOp) internal pure returns (uint256 prefund) {
         unchecked {
-            return requiredGas(userOp) * gasPrice(userOp);
+            return requiredGas(userOp) * userOp.maxFeePerGas;
         }
     }
 
     function hasPaymaster(UserOperation calldata userOp) internal pure returns (bool) {
-        return userOp.paymaster != address(0);
+        return userOp.paymasterAndData.length > 0;
     }
 
     function pack(UserOperation calldata userOp) internal pure returns (bytes memory ret) {
